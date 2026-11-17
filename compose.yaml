@@ -1,0 +1,52 @@
+services:
+  app:
+    build:
+      context: .
+      target: production
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: "8000"
+      CHROMA_PERSIST_DIRECTORY: /app/data/chroma
+    volumes:
+      - app-data:/app/data
+      - ./skills:/app/skills:ro
+      - ./config/mcp_servers.json:/app/config/mcp_servers.json:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    environment:
+      IS_PERSISTENT: "TRUE"
+      PERSIST_DIRECTORY: /chroma/chroma
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chromadb-data:/chroma/chroma
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/heartbeat', timeout=3).close()"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+
+volumes:
+  app-data:
+  redis-data:
+  chromadb-data:
